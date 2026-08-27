@@ -1,3 +1,19 @@
+# Preamble
+This repository contains code used to generate the findings presented in 'Association between genetic ancestry and Multiple Sclerosis severity' published in _Annals Of Neurology_.
+
+GWAS summary statistics can be downloaded from the GWAS catalogue.
+
+27-08-26
+b.jacobs@qmul.ac.uk
+
+Contents:
+- [Imputation](#Imputation)
+- [Genotype QC](#QC)
+- [Phenotype QC & analysis](#Phenotype)
+- [GWAS](#GWAS)
+  - [Advanced Options](#advanced-options)
+- [FAQ](#faq)
+
 # Imputation
 ## Imputation prep
 ````unix
@@ -27,13 +43,19 @@ do
 done
 ````
 
-## Imputation
+## Imputation 
 Download files. 
+
 Attempt imputation via TOPMED-r3 server.
+
 TOPMED-r3 panel. 
+
 R2 filter 0.001.
-Eagle 2.4
+
+Eagle 2.4.
+
 1st pass fails due to strand flips.
+
 Download snps-excluded.txt & exclude SNPs as follows:
 
 ````unix
@@ -67,11 +89,7 @@ done
 Then resubmit the job and try again. 
 
 
-# Imputation
-
-###########################
-### Download imputed data
-###########################
+## Download imputed data
 
 ````unix
 mkdir /data/scratch/hmy117/adams_imputed_severity_topmed
@@ -105,7 +123,7 @@ wget https://imputation.biodatacatalyst.nhlbi.nih.gov/share/results/581417180d0d
 wget https://imputation.biodatacatalyst.nhlbi.nih.gov/share/results/c86d148c881b194c61fee3662e114fc58e8229323dde85c421fcd90bfa69fe40/results.md5 &
 
 
-# unzip
+## Unzip
 for i in {1..22};
 do
   unzip -P VtqN8svNP#2aEz -o chr_$i\.zip &
@@ -113,11 +131,11 @@ done
 
 ````
 
-### SNP QC
+# QC
 - SNP QC on individual VCFs
 - Conversion back to plink, hard call with threshold 0.3
 
-Get imputation scores
+## Get imputation scores
 ````unix 
 
 module load bcftools
@@ -128,7 +146,7 @@ bcftools query -f "%CHROM\t%POS\t%ID\t%INFO/MAF\t%INFO/R2\t%INFO/ER2\t%INFO/TYPE
 done 
 ````
 
-# Explore in R 
+## Explore in R 
 ````R 
 library(tidyverse)
 dat = read_table("/data/scratch/hmy117/snp_info_data")
@@ -138,13 +156,14 @@ dat = dat %>% filter(R2>0.7 & MAF > 0.01)
 
 ````
 
+## Run QC
 
 ````unix
 
 qsub /data/home/hmy117/ADAMS_severity/scripts/plink_snp_qc_imputed.sh
 ````
 
-### Update fam files
+## Update fam files
 - Modify IDs in R
 ````R
 library(tidyverse)
@@ -162,7 +181,7 @@ write_tsv(df,paste0("chr",i,"_newids.tsv"),col_names = F)
 
 ````
 
-#### Update IDs in PLINK
+## Update IDs in PLINK
 - Merge across chromosomes in PLINK
 - Rename sample IDs
 ````unix
@@ -171,7 +190,7 @@ cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 for i in {22..1}; do ~/plink --bfile ADAMS_imputed_qc_chr$i --update-ids chr$i\_newids.tsv --out chr$i\_combined_adams_imputed_newids --make-bed; done
 ````
 
-### Merge chromosomes
+## Merge chromosomes
 ````unix
 cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 rm filelist_for_merge
@@ -183,7 +202,7 @@ for i in {2..22}; do echo chr$i\_combined_adams_imputed_newids >> filelist_for_m
 
 ````
 
-### Further QC
+## Further QC
 ````unix
 cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 
@@ -201,10 +220,9 @@ wc combined_adams_imputed_qc.bim
 
 ````
 
-### Individual QC 
+## Individual QC 
 
-
-#### Heterozygosity
+### Heterozygosity
 ````unix
 cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 ~/plink --bfile combined_adams_imputed_qc \
@@ -223,11 +241,14 @@ cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 ````
 
 
-# Ancestry inference
+### Ancestry inference
 
-## Reference preparation
-### AJ ref 
+#### Reference preparation
+
+##### AJ ref 
+
 Note this in in hg18
+
 ````unix
 mkdir /data/scratch/hmy117/aj_ref 
 
@@ -272,7 +293,6 @@ awk '{print $4,$3}' hg38_bedfile > hg38_snp_positions
 
 ````
 
-### HGDP-1kg
 #### Download HGDP reference data
 ````unix
 qsub /data/home/hmy117/ADAMS_severity/scripts/download_hgdp_1kg.sh
@@ -380,7 +400,6 @@ for i in {2..22};
 #### Combine with genotype data 
 ````unix 
 cd /data/scratch/hmy117/hgdp_1kg_genomes/
-#qlogin -pe smp 1 -l h_vmem=256G -l h_rt=240:00:00
 
 #head /data/home/hmy117/ADAMS_severity/combined_adams_imputed.bim
 
@@ -561,13 +580,10 @@ q = q %>% arrange(predicted_ancestry,value)
 q$IID = factor(q$IID,levels=unique(q$IID),ordered=T)
 
 
+````
 
 
-```
-
-
-### Kinship
-#### Inference
+## Kinship
 ````unix
 cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 ~/king -b combined_adams_imputed_qc.bed --duplicate
@@ -576,7 +592,8 @@ cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 ````
 
 
-### Phenotype cleaning 
+# Phenotype
+Cleaning of phenotypic data.  
 ````R 
 library(tidyverse)
 
@@ -790,11 +807,6 @@ data = data %>% filter(!IID %in% dups$IID)
 
 # arrange by missingness for full duplicate (oragene duplicates)
 doubles = data %>% dplyr::count(IID) %>% filter(n>1)
-data %>% filter(IID %in% doubles$IID) %>% 
-dplyr::select(IID,latest_edss) %>% 
-group_by(IID) %>% 
-mutate(edss_num = row_number()) %>%
-pivot_wider(names_from = edss_num, values_from = latest_edss, id_cols = IID)
 
 data = data %>% 
   arrange(latest_edss) %>%
@@ -952,8 +964,25 @@ library(tidyverse)
 setwd("/data/home/hmy117/ADAMS_severity/")
 data = readRDS("./outputs/cleaned_pheno_data.rds")
 
+# derive correlations between phenotypes to get N effective tests 
+pheno_dat = data %>% 
+  dplyr::select(age_at_dx,edss,eq5d_vas,msis_physical_normalised,gARMSS,subtype_clean)
+colnames(pheno_dat) = c("Age at dx","EDSS","EQ5D","MSIS-Phys","gARMSS","Subtype")
+pheno_dat = pheno_dat %>% mutate(Subtype = case_when(
+  Subtype == "PPMS" ~ 1,
+  Subtype == "SPMS" ~ 2,
+  Subtype == "RRMS" ~ 3  
+))
+prcomp(na.omit(pheno_dat))
+data.frame(
+  sd = prcomp(na.omit(pheno_dat))$sd
+) %>%
+mutate(cum_pve = cumsum(sd)/sum(sd))
 
-data %>% filter(ageatedss - age_at_dx <3)
+  cor.test(pheno_dat$EDSS,pheno_dat$`MSIS-Phys`,method="spearman")
+  corrmat = cor(pheno_dat,use="pairwise.complete.obs")
+
+
 
 # add global ancestry proportions 
 q = read_table("/data/scratch/hmy117/hgdp_1kg_genomes/combined_adams_imputed_qc_pruned_merge_for_admixture.8.Q",col_names=F)
@@ -1067,6 +1096,17 @@ labs(x="Age at EDSS",y="EDSS",fill="ARMSS")
 dev.off()
 
 
+png("./plots/age_vs_edss_vs_armss.png",res=900,units="in",width=5,height=3)
+ggplot(data,
+aes(ageatedss,edss,fill=gARMSS))+
+geom_point(alpha=0.5,size=3,shape=21)+
+theme_bw()+
+scale_y_continuous(breaks = seq(0,10,by=0.5))+
+scale_x_continuous(breaks = seq(0,100,by=10))+
+scale_fill_viridis_c(option="plasma",breaks = seq(0,10,by=1),limits = c(0,11))+
+labs(x="Age at EDSS",y="EDSS",fill="ARMSS")
+dev.off()
+
 # repeat, adjusting for sex 
 # bootstrap regression models 
 bootstrap_linreg = function(anc){
@@ -1123,6 +1163,91 @@ dev.off()
 prevalent_ancestries = data %>% dplyr::count(predicted_ancestry) %>% filter(n>20)
 data = data %>% filter(predicted_ancestry %in% prevalent_ancestries$predicted_ancestry)
 
+# impute missing armss
+library(mice)
+data = data %>%
+  mutate(raw_edss = ifelse(edss_source=="Observed",edss,NA))
+
+predictor_matrix = matrix(c(0,1,1,1,0,1,1,1,0),nrow=3)
+rownames(predictor_matrix) = c("msis_physical_normalised","mobility_clean","raw_edss")
+colnames(predictor_matrix) = c("msis_physical_normalised","mobility_clean","raw_edss")
+just_edss = data %>% dplyr::select(raw_edss,msis_physical_normalised,mobility_clean)
+
+# impute with n_iter iterations
+n_iter = 100
+imputed_data = mice(just_edss,m=n_iter,maxit=50,meth='pmm',seed=500,predictorMatrix = predictor_matrix)
+
+# join with main data 
+saveRDS(imputed_data,"./outputs/imputed_edss_scores.rds")
+# imputed_data = readRDS("./outputs/imputed_edss_scores.rds")
+imputed_edss = imputed_data$imp$raw_edss %>% mutate(row_id = rownames(imputed_data$imp$raw_edss))
+colnames(imputed_edss)[c(1:n_iter)] = paste0("imputed_edss",seq(1:n_iter))
+data$row_id = seq(1:nrow(data))
+imputed_edss$row_id = as.numeric(imputed_edss$row_id)
+
+# join 
+data = data %>% left_join(imputed_edss,by="row_id")
+
+# remove those with missing mobility & MSIS
+model_dat = data %>%
+ filter(!(
+  is.na(mobility_clean) & is.na(raw_edss) & is.na(msis_physical_normalised)
+ ))
+
+# compare imputed vs observed values 
+imputed_vs_observed = model_dat %>%
+  dplyr::select(row_id,contains("imputed_edss")) %>%
+  dplyr::select(-imputed_edss) %>%
+  pivot_longer(cols = -c(1,2,3)) %>% 
+  filter(!is.na(value)) %>%
+  group_by(row_id) %>% 
+  summarise(median_imp = median(value)) %>%
+  full_join(
+    model_dat %>% dplyr::select(mobility_clean,msis_physical_normalised,row_id,raw_edss),
+    by="row_id"
+  ) %>% 
+  mutate(edss_source = ifelse(!is.na(raw_edss),"Observed","Imputed")) %>%
+  mutate(edss_for_plot = ifelse(!is.na(raw_edss),raw_edss,median_imp))
+
+png("/data/home/hmy117/ADAMS_severity/plots/multiple_imputation.png",res=900,units="in",width=10,height=4)
+
+ ggplot(imputed_vs_observed %>% filter(!is.na(mobility_clean)),aes(msis_physical_normalised,edss_for_plot,fill=mobility_clean))+
+  geom_point(shape=21,size=3)+
+  facet_wrap(~edss_source)+
+  theme_bw()+
+  labs(x="MSIS Physical",y="EDSS",fill="Mobility")+
+  scale_fill_brewer(palette="Set1")
+dev.off()
+
+
+# fill in observed values 
+model_res = list()
+for(i in c(1:n_iter)){
+  model_dat = model_dat %>%
+  mutate(model_edss = ifelse(is.na(raw_edss),.data[[paste0("imputed_edss",i)]],raw_edss))
+
+  model_dat$edss = model_dat$model_edss
+
+  # get armss 
+  model_dat = ms.sev::global_armss(model_dat)$data
+  model_dat = model_dat %>% filter(!is.na(gARMSS))
+  
+  # fit model 
+  model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
+  
+  model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
+  model_dat$Site = relevel(factor(model_dat$Site),ref="Website")
+
+  armss_model = glm(data = model_dat, armss_norm ~ ageatedss + Site + Sex + predicted_ancestry) 
+  model_res[[i]] = armss_model
+}
+
+pool(model_res) %>% summary() %>% 
+  mutate(lower_ci = estimate - 1.96 * std.error) %>%
+  mutate(upper_ci = estimate + 1.96 * std.error) %>%
+  write_csv(file = "/data/home/hmy117/ADAMS_severity/outputs/imputed_model_mice.csv")
+
+
 ###############################################
 # Ancestry vs age at dx 
 ###############################################
@@ -1141,6 +1266,24 @@ scale_fill_brewer(palette="Set1")+
 geom_text(data = medians,aes(y=85,label = format(round(median_age,1),nsmall=1)))+
 theme(legend.position="none")
 png("/data/home/hmy117/ADAMS_severity/plots/age_at_dx.png",res=900,units="in",width=6,height=4)
+p1
+dev.off()
+
+# repeat stratified by site 
+counts = data %>% dplyr::count(predicted_ancestry,Site) %>% mutate(Site = ifelse(Site == "Other","Clinical site",Site))
+medians = data %>% group_by(predicted_ancestry,Site) %>% summarise(median_age = median(age_at_dx,na.rm=T)) %>% mutate(Site = ifelse(Site == "Other","Clinical site",Site))
+
+p1 = ggplot(data %>% filter(Site != "UKMSR")%>% mutate(Site = ifelse(Site == "Other","Clinical site",Site)),aes(predicted_ancestry,age_at_dx,fill=predicted_ancestry))+
+geom_violin(alpha=0.5)+
+facet_wrap(~Site)+
+geom_boxplot(width=0.1,alpha=0.3)+
+geom_jitter(width=0.1,alpha=0.1)+
+theme_bw()+
+labs(x="Ancestry",y="Age at diagnosis",fill="Ancestry")+
+scale_fill_brewer(palette="Set1")+
+geom_text(data = medians %>% filter(Site != "UKMSR"),aes(y=85,label = format(round(median_age,1),nsmall=1)))+
+theme(legend.position="none")
+png("/data/home/hmy117/ADAMS_severity/plots/age_at_dx_by_site.png",res=900,units="in",width=8,height=4)
 p1
 dev.off()
 
@@ -1266,6 +1409,54 @@ model_res = all_coefs %>%
   dplyr::select(term,beta,lower,upper,p)
 write_csv(model_res,"./outputs/age_dx_model_subtype_site.csv")
 
+# stratified model - just website
+# add site 
+all_coefs = list()
+for(i in c(1:10000)){
+  dat = data %>% filter(!is.na(age_at_dx) & Site == "Website")
+  dat = sample_n(dat,size = nrow(dat),replace=T)
+  dat$predicted_ancestry = relevel(factor(dat$predicted_ancestry),ref="EUR")
+  coefs = lm(data = dat,age_at_dx ~ Sex +  predicted_ancestry) %>% broom::tidy()
+  all_coefs[[i]] = coefs
+}
+all_coefs = do.call("bind_rows",all_coefs)
+
+# main model 
+main_model = lm(data = data%>% filter(!is.na(age_at_dx) & Site == "Website"),age_at_dx ~ Sex  +  predicted_ancestry) %>% broom::tidy()
+data%>% filter(!is.na(age_at_dx) & Site == "Website") %>% dplyr::count(predicted_ancestry)
+
+model_res = all_coefs %>%
+  group_by(term) %>% 
+  summarise(sd_est = sd(estimate), lower = quantile(estimate,0.025), upper = quantile(estimate,0.975)) %>% 
+  left_join(main_model %>%  dplyr::select(term,estimate) %>% dplyr::rename("beta" = estimate),by="term") %>%
+  mutate(z = beta/sd_est) %>% 
+  mutate(p = 2 * (1 - pnorm(abs(z)))) %>% 
+  dplyr::select(term,beta,lower,upper,p)
+write_csv(model_res,"./outputs/age_dx_model_subtype_stratified_by_site_website.csv")
+
+# repeat for clinical sites
+all_coefs = list()
+for(i in c(1:10000)){
+  dat = data %>% filter(!is.na(age_at_dx) & Site == "Other")
+  dat = sample_n(dat,size = nrow(dat),replace=T)
+  dat$predicted_ancestry = relevel(factor(dat$predicted_ancestry),ref="EUR")
+  coefs = lm(data = dat,age_at_dx ~ Sex +  predicted_ancestry) %>% broom::tidy()
+  all_coefs[[i]] = coefs
+}
+all_coefs = do.call("bind_rows",all_coefs)
+
+# main model 
+main_model = lm(data = data%>% filter(!is.na(age_at_dx) & Site == "Other"),age_at_dx ~ Sex   + predicted_ancestry) %>% broom::tidy()
+data%>% filter(!is.na(age_at_dx) & Site == "Other") %>% dplyr::count(predicted_ancestry)
+model_res = all_coefs %>%
+  group_by(term) %>% 
+  summarise(sd_est = sd(estimate), lower = quantile(estimate,0.025), upper = quantile(estimate,0.975)) %>% 
+  left_join(main_model %>%  dplyr::select(term,estimate) %>% dplyr::rename("beta" = estimate),by="term") %>%
+  mutate(z = beta/sd_est) %>% 
+  mutate(p = 2 * (1 - pnorm(abs(z)))) %>% 
+  dplyr::select(term,beta,lower,upper,p)
+write_csv(model_res,"./outputs/age_dx_model_subtype_stratified_by_site_clinical.csv")
+
 
 
 ##################### 
@@ -1330,7 +1521,7 @@ mutate(n = nrow(model_dat),
   n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
 
 # just adjust for age 
-age_model = glm(data = model_dat, armss_norm ~ ageatedss + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Sex",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`) %>%
+age_model = glm(data = model_dat, armss_norm ~ ageatedss + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`) %>%
 mutate(n = nrow(model_dat), 
   n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
   n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
@@ -1360,38 +1551,6 @@ mutate(n = nrow(model_dat),
   n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
   n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
   n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
-
-# 5y of dx
-model_dat = data %>% filter(!is.na(gARMSS))
-model_dat = model_dat %>% 
-  mutate(disease_duration_at_edss = ageatedss - age_at_dx) %>% 
-  filter(disease_duration_at_edss < 5)
-
-model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
-
-
-
-age_sex_site_within_5y_of_dx = glm(data = model_dat, armss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex + Site (<5y from dx)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
-mutate(n = nrow(model_dat), 
-  n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
-  n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
-  n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
-  n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
-
-# just directly observed EDSS
-model_dat = data %>% filter(!is.na(gARMSS))
-model_dat = model_dat %>% 
-  filter(edss_source == "Observed")
-
-model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
-age_sex_site_direct_edss = glm(data = model_dat, armss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex + Site (direct EDSS)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
-mutate(n = nrow(model_dat), 
-  n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
-  n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
-  n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
-  n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
-
-
 
 # adjust for age & sex
 age_sex = glm(data = model_dat, armss_norm ~ ageatedss + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
@@ -1439,7 +1598,38 @@ mutate(n = nrow(model_dat),
   n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
   n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
 
+# 5y of dx
+model_dat = data %>% filter(!is.na(gARMSS))
+model_dat = model_dat %>% 
+  mutate(disease_duration_at_edss = ageatedss - age_at_dx) %>% 
+  filter(disease_duration_at_edss < 5)
+
+model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
+
+
+
+age_sex_site_within_5y_of_dx = glm(data = model_dat, armss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex + Site (<5y from dx)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
+mutate(n = nrow(model_dat), 
+  n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
+  n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
+  n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
+  n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
+
+# just directly observed EDSS
+model_dat = data %>% filter(!is.na(gARMSS))
+model_dat = model_dat %>% 
+  filter(edss_source == "Observed")
+
+model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
+age_sex_site_direct_edss = glm(data = model_dat, armss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex + Site (direct EDSS)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
+mutate(n = nrow(model_dat), 
+  n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
+  n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
+  n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
+  n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
+
 # primary analysis - EDSS itself 
+model_dat = data %>% filter(!is.na(edss))
 model_dat$edss_norm = RNOmni::RankNorm(model_dat$edss)
 age_sex_site_edss = glm(data = model_dat, edss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex + Site",outcome = "EDSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
 mutate(n = nrow(model_dat), 
@@ -1558,7 +1748,7 @@ scale_y_continuous(limits=c(0,12),breaks=seq(0,10,by=1))+
 labs(x="Ancestry",y="MSSS",fill="Ancestry")+
 scale_fill_brewer(palette="Set1")+
 geom_text(data = medians,aes(y=11,label = format(round(median_msss,1),nsmall=1)))+
-theme(legend.position="none")
+theme(legend.position="none",panel.grid = element_blank())
 
 
 # plot edss
@@ -1574,7 +1764,7 @@ scale_y_continuous(limits=c(0,12),breaks=seq(0,10,by=1))+
 labs(x="Ancestry",y="EDSS",fill="Ancestry")+
 scale_fill_brewer(palette="Set1")+
 geom_text(data = medians,aes(y=11,label = format(round(median_edss,1),nsmall=1)))+
-theme(legend.position="none")
+theme(legend.position="none",panel.grid = element_blank())
 
 
 # plot msis
@@ -1590,7 +1780,7 @@ labs(x="Ancestry",y="MSIS (Physical)",fill="Ancestry")+
 scale_fill_brewer(palette="Set1")+
 scale_y_continuous(limits=c(0,120),breaks=seq(0,100,by=10))+
 geom_text(data = medians,aes(y=110,label = format(round(median_msis,1),nsmall=1)))+
-theme(legend.position="none")
+theme(legend.position="none",panel.grid = element_blank())
 
 # plot msis-psych
 counts = data %>% dplyr::count(predicted_ancestry)
@@ -1605,7 +1795,7 @@ labs(x="Ancestry",y="MSIS (Psychological)",fill="Ancestry")+
 scale_fill_brewer(palette="Set1")+
 scale_y_continuous(limits=c(0,120),breaks=seq(0,100,by=10))+
 geom_text(data = medians,aes(y=110,label = format(round(median_msis,1),nsmall=1)))+
-theme(legend.position="none")
+theme(legend.position="none",panel.grid = element_blank())
 
 # plot eq5d
 counts = data %>% dplyr::count(predicted_ancestry)
@@ -1620,7 +1810,7 @@ labs(x="Ancestry",y="EQ5D",fill="Ancestry")+
 scale_fill_brewer(palette="Set1")+
 scale_y_continuous(limits=c(0,120),breaks=seq(0,100,by=10))+
 geom_text(data = medians,aes(y=110,label = format(round(median_eq5d,1),nsmall=1)))+
-theme(legend.position="none")
+theme(legend.position="none",panel.grid = element_blank())
 
 png("/data/home/hmy117/ADAMS_severity/plots/msis_and_garmss_vs_ancestry.png",res=900,units="in",width=6,height=12)
 gridExtra::grid.arrange(p1,p12,p4,p2,p3,p11,nrow=6)
@@ -1640,217 +1830,14 @@ model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
 glm(data = model_dat, armss_norm ~ ageatedss + Site + Sex + subtype_clean + AFR) %>% broom::tidy() 
 
 
-# models - armss
-## rank normalise 
-data$Site = relevel(factor(data$Site),ref="Website")
-data$subtype_clean_binary = ifelse(data$subtype_clean=="PPMS","PMS","RMS")
-data$subtype_clean_binary = relevel(factor(data$subtype_clean_binary),ref="RMS")
-
-model_dat = data %>% filter(!is.na(gARMSS))
-model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-primary_model = glm(data = model_dat, armss_norm ~ predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Unadjusted",outcome = "ARMSS")
-
-# site + sex 
-site_sex = glm(data = model_dat, armss_norm ~ Sex + Site + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Site + Sex)",outcome = "ARMSS")
-
-# site + sex + age 
-site_sex_age = glm(data = model_dat, armss_norm ~ ageatedss + Sex + Site + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Site + Sex + Age)",outcome = "ARMSS")
-
-# site + sex + age 
-
-# descriptive plot 
-ggplot(data,aes(predicted_ancestry,gARMSS))+
-facet_wrap(subtype_clean_binary ~ Site)+
-geom_boxplot()
-
-
-# full model 
-full = glm(data = model_dat, armss_norm ~ ageatedss + Sex + Site + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype)",outcome = "ARMSS")
-
-# stratified models by site 
-stratified_website = glm(data = model_dat %>% filter(Site == "Website"), armss_norm ~ ageatedss + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Stratified website",outcome = "ARMSS")
-stratified_sites = glm(data = model_dat %>% filter(Site == "Other"), armss_norm ~ ageatedss + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Stratified sites",outcome = "ARMSS")
-stratified_ukmsr = glm(data = model_dat %>% filter(Site == "UKMSR"), armss_norm ~ ageatedss + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Stratified sites",outcome = "ARMSS")
-
-
-
-# full model + age at dx
-age_at_dx_model = glm(data = model_dat, armss_norm ~ ageatedss + age_at_dx + Sex + Site + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Age at dx (Site + Sex + Subtype)",outcome = "ARMSS")
-
-# repeat with just major ancestries
-# repeat with age 
-agesex = glm(data = model_dat, armss_norm ~ ageatedss + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex",outcome = "ARMSS")
-
-# repeat with sex 
-sex = glm(data = model_dat, armss_norm ~ Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Sex",outcome = "ARMSS")
-
-# repeat with age 
-age = glm(data = model_dat, armss_norm ~ ageatedss + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age",outcome = "ARMSS")
-
-# repeat with subtype 
-subtype = glm(data = model_dat, armss_norm ~ subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Subtype",outcome = "ARMSS")
-
-# repeat with site
-site = glm(data = model_dat, armss_norm ~ Site + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Site",outcome = "ARMSS")
-
-# full model with just directly observed edss
-edss_observed = glm(data = model_dat %>% filter(edss_source=="Observed"), armss_norm ~ ageatedss + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype) - just observed EDSS",outcome = "ARMSS")
-
-# repeat model with just <5 years of dx
-model_dat = model_dat %>% mutate(disease_duration_at_edss = ageatedss - age_at_dx )
-data$disease_duration_at_edss %>% hist()
-within_5y_of_dx = glm(data = model_dat %>% filter(disease_duration_at_edss<5), armss_norm ~ ageatedss + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype) - within 5y of dx",outcome = "ARMSS")
-
-## rank normalise 
-model_dat = data %>% filter(!is.na(gARMSS) & predicted_ancestry %in% c("EUR","CSA","AFR"))
-model_dat$armss_norm = RNOmni::RankNorm(model_dat$gARMSS)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-major_anc_model = glm(data = model_dat, armss_norm ~ predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Unadjusted (major ancestries)",outcome = "ARMSS")
-
-
-# full model for MSSS
-model_dat = data %>% filter(!is.na(uGMSSS))
-model_dat$msss_norm = RNOmni::RankNorm(model_dat$uGMSSS)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-full_msss = glm(data = model_dat, msss_norm ~ ageatedss + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype)",outcome = "MSSS")
-
-# MSIS models 
-model_dat = data %>% filter(!is.na(msis_physical_normalised))
-model_dat$msis_norm = RNOmni::RankNorm(model_dat$msis_physical_normalised)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-unadjusted_msis = glm(data = model_dat, msis_norm ~ age_at_msis + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Age at MSIS",outcome = "MSIS-29 (Phys)")
-full_msis = glm(data = model_dat, msis_norm ~ age_at_msis + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype)",outcome = "MSIS-29 (Phys)")
-
-
-# see if this is related to disease duration 
-model_dat = model_dat %>% mutate(disease_duration_at_msis = age_at_msis - age_at_dx )
-within_5y_of_dx_msis = glm(data = model_dat %>% filter(disease_duration_at_msis<5), msis_norm ~ age_at_msis + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype) - within 5y of dx",outcome = "MSIS-29 (Phys)")
-
-
-# MSIS-psych
-model_dat = data %>% filter(!is.na(msis_psych_normalised))
-model_dat$msis_norm = RNOmni::RankNorm(model_dat$msis_psych_normalised)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-unadjusted_msis_psych = glm(data = model_dat, msis_norm ~ age_at_msis + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Age at MSIS",outcome = "MSIS-29 (Psych)")
-full_msis_psych = glm(data = model_dat, msis_norm ~ age_at_msis + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype)",outcome = "MSIS-29 (Psych)")
-
-# full model for EDSS
-model_dat = data %>% filter(!is.na(edss))
-model_dat$edss_norm = RNOmni::RankNorm(model_dat$edss)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-full_edss = glm(data = model_dat, edss_norm ~ ageatedss + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype)",outcome = "EDSS")
-
-# simple edss model 
-simple_edss = glm(data = model_dat, edss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex)",outcome = "EDSS")
-
-# full model for EQ5D
-model_dat = data %>% filter(!is.na(eq5d_vas))
-model_dat$eq5d_norm = RNOmni::RankNorm(model_dat$eq5d_vas)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-full_eq5d = glm(data = model_dat, eq5d_norm ~ ageatedss + Site + Sex + subtype_clean_binary + predicted_ancestry) %>% broom::tidy()  %>% mutate(model = "Full (Age + Site + Sex + Subtype)",outcome = "EQ5D")
-
-# combine models for table
-model_res = bind_rows(full,agesex,major_anc_model,full_edss,full_msis,full_msss,full_msis_psych,full_eq5d,edss_observed) %>% 
-mutate(term = str_remove_all(term,"predicted_ancestry")) 
-model_res$outcome = factor(model_res$outcome,levels = c("ARMSS","MSSS","EDSS","MSIS-29 (Phys)","MSIS-29 (Psych)","EQ5D"),ordered=T)
-
-model_res = model_res %>% 
- mutate(lower_ci = estimate - 1.96* std.error,upper_ci = estimate + 1.96* std.error) %>%
- dplyr::select(term,estimate,lower_ci,upper_ci,p.value,model,outcome)  
-write_csv(model_res,"/data/home/hmy117/ADAMS_severity/outputs/model_res_severity.csv")
-
-# combine all armss models for plot
-model_res = bind_rows(full,full_edss,full_msis,full_msss,full_msis_psych,full_eq5d) %>% 
-filter(grepl("predicted_ancestry",term)) %>% 
-mutate(term = str_remove_all(term,"predicted_ancestry")) 
-model_res$outcome = factor(model_res$outcome,levels = c("ARMSS","MSSS","EDSS","MSIS-29 (Phys)","MSIS-29 (Psych)","EQ5D"),ordered=T)
-
-
-bonf = 0.05 / nrow(model_res)
-
-model_res = model_res %>% 
-mutate(p_lab = case_when(
-  p.value < bonf ~ "**",
-  p.value < 0.05 ~ "*"
-))
-
-png("/data/home/hmy117/ADAMS_severity/plots/outcomes_regression_forest.png",res=900,units="in",width=4,height=8)
-ggplot(model_res,aes(estimate,term,fill=outcome))+
-  theme_minimal() +
-  labs(x="Effect estimate",y="Ancestry")+
-  facet_wrap(~outcome,ncol=1)+
-    geom_vline(xintercept=0,linetype="dashed",color="grey",lwd=1,alpha=0.3)+
-  geom_errorbar(mapping = aes(xmin = estimate - 1.96*std.error,xmax = estimate + 1.96*std.error,y=term),orientation="y",height=0.05)+
-  geom_point(shape=21,size=3)+
-  geom_text(aes(label=p_lab,nudge_y = 0.2,nudge_x=0.2))+
-  theme(legend.position="none")+
-  scale_fill_brewer(palette="Set1")
-dev.off()
-
-# calculate disease duration 
-data = data %>% 
-  mutate(disease_duration_at_edss = ageatedss - age_at_dx) %>%
-  mutate(disease_duration_at_msis = age_at_msis - age_at_dx) 
-
-ggplot(data,aes(predicted_ancestry,disease_duration_at_edss))+
-  geom_boxplot()
-
-# count edss 6 by
-data = data %>% 
-  mutate(edss6 = ifelse(edss >= 6,1,0))
-data$predicted_ancestry = relevel(factor(data$predicted_ancestry),ref="EUR")
-data$Site = relevel(factor(data$Site),ref="Website")
-
-glm(data = data,edss6 ~ + Site + Sex + subtype_clean_binary + ageatedss + predicted_ancestry, family = binomial(link="logit")) %>% 
-broom::tidy()
-
-
-edss6_props = data %>% 
-  mutate(edss6 = ifelse(edss >= 6,"yes","no")) %>%
-  mutate(age_at_edss_bin = Hmisc::cut2(ageatedss,cuts = c(50))) %>% 
-  group_by(predicted_ancestry,age_at_edss_bin) %>% 
-  dplyr::count(edss6) %>% 
-  mutate(prop = n/sum(n)) %>% 
-  filter(!is.na(age_at_edss_bin)) %>% 
-  filter(edss6=="yes") %>% 
-  pivot_wider(id_cols = age_at_edss_bin,values_from = prop,names_from=predicted_ancestry)
-
-  %>% 
-  pivot_wider(id_cols = term,values_from = c("estimate","p.value"),names_from = model)
-write_csv(model_dat,"/data/home/hmy117/ADAMS_severity/outputs/ancestry_vs_armss_model_data.csv")
-
-# msss
-model_dat = data %>% filter(!is.na(uGMSSS))
-model_dat$msss_norm = RNOmni::RankNorm(model_dat$uGMSSS)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-glm(data = model_dat, msss_norm ~ predicted_ancestry) %>% broom::tidy()
-
-# repeat with sex 
-glm(data = model_dat, msss_norm ~ Sex + predicted_ancestry) %>% broom::tidy()
-
-# just edss
-model_dat = data %>% filter(!is.na(edss))
-model_dat$edss_norm = RNOmni::RankNorm(model_dat$edss)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-glm(data = model_dat, edss_norm ~ ageatedss + predicted_ancestry) %>% broom::tidy()
-
-# repeat with sex & age at edss
-glm(data = model_dat, edss_norm ~ ageatedss + Sex + predicted_ancestry) %>% broom::tidy()
-
-# repeat with subtype
-glm(data = model_dat, edss_norm ~ ageatedss + Sex + predicted_ancestry) %>% broom::tidy()
-
-# age at onset 
-model_dat = data %>% filter(!is.na(age_at_dx))
-model_dat$age_dx_norm = RNOmni::RankNorm(model_dat$age_at_dx)
-model_dat$predicted_ancestry = relevel(factor(model_dat$predicted_ancestry),ref="EUR")
-glm(data = model_dat, age_dx_norm ~ predicted_ancestry) %>% broom::tidy()
 
 ````
 
+# GWAS
 
-### Remove duplicates & copy back to home
+GWAS of severity, and replication analysis of DYSF-ZNF638 SNPs.
+
+## Remove duplicates & copy back to home
 ````unix 
 cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 ~/plink --bfile combined_adams_imputed_qc \
@@ -1862,33 +1849,7 @@ cd /data/scratch/hmy117/adams_imputed_severity_topmed/
 
 ````
 
-# Get genotypes for Barts SDE
-````unix 
-~/plink --bfile /data/home/hmy117/ADAMS_severity/combined_adams_imputed \
---snp "2:71449869:C:A" \
---out /data/home/hmy117/ADAMS_severity/outputs/rs10191329_genotypes_for_sde \
---recode A
-````
-
-# Make export for SDE
-````R 
-library(tidyverse)
-
-ancestry = read_tsv("/data/home/hmy117/ADAMS_severity/outputs/ancestry_calls.tsv",col_types="ccc")
-genos = read_table("/data/home/hmy117/ADAMS_severity/outputs/rs10191329_genotypes_for_sde.raw")
-data = readRDS("/data/home/hmy117/ADAMS_severity/outputs/cleaned_pheno_data.rds")
-
-# filter to website only 
-barts_sde_export = data %>% 
-  filter(Site == "Website" & !is.na(Token)) %>% 
-  dplyr::select(Token,Sex,ethnicity_clean,ageatedss,edss,IID,predicted_ancestry) %>% 
-  inner_join(genos %>%
-    dplyr::select(IID,`2:71449869:C:A_A`),
-    by="IID") %>%
-    dplyr::select(-IID)
-write_tsv(barts_sde_export,"/data/home/hmy117/ADAMS_severity/outputs/barts_sde_export,barts_sde_export.tsv")
-
-# PC plots 
+## PC plots 
 ````R 
 
 library(tidyverse)
@@ -1938,10 +1899,9 @@ p
 dev.off()
 
 
-`````
+````
 
-
-# replications of specific IMSGC alleles at dysferlin locus
+## Extract DYSF SNPs
 ````unix 
 
 zgrep rs10191329 /data/scratch/hmy117/adams_imputed_severity_topmed/chr2.info.gz
@@ -1979,7 +1939,7 @@ done
 qlogin -pe smp 1 -l h_vmem=256G -l h_rt=240:00:00
 cd /data/home/hmy117/ADAMS_severity/
 
-# finish
+# Analysis in R
 ````R
 library(tidyverse)
 
@@ -2404,50 +2364,9 @@ for(ancestry in c("CSA","EUR","AFR")){
 }
 res = do.call("bind_rows",res)
 res
-
-# edss 6
-props = geno %>% 
-  group_by(age_bin,rs10191329_genotype,predicted_ancestry) %>% 
-  dplyr::count(edss6) %>% 
-  mutate(prop = n/sum(n)) %>%
-  filter(edss6==1) %>% 
-  filter(predicted_ancestry %in% c("CSA","EUR","AFR")) 
-
-png("/data/home/hmy117/ADAMS_severity/plots/rs10191329_vs_edss_age_bin.png",res=900,units="in",width=6,height=6)
-ggplot(props,aes(age_bin,fill=rs10191329_genotype,prop))+
-geom_col(color="black",position="dodge")+
-facet_wrap(~predicted_ancestry,nrow=3)
-dev.off()
-
-library(survival)
-library(survminer)
-
-geno$edss6 <- ifelse(geno$edss >= 6.0, 1, 0)
-geno$survtime <- geno$ageatedss - geno$age_at_dx
-
-# build survival object
-fit <- survfit(Surv(survtime, edss6) ~ factor(rs10191329_genotype), data = geno)
-
-coxph(Surv(survtime, edss6) ~ predicted_ancestry + batch + Sex + rs10191329_A, data = geno) %>% broom::tidy()
-
-# plot with ggsurvplot
-ggsurvplot(
-  fit,
-  data = geno,
-  risk.table = TRUE,          # add risk table
-  pval = TRUE,                # log-rank test p-value
-  conf.int = TRUE,            # show confidence intervals
-  xlab = "Time (years)",
-  ylab = "Survival probability (EDSS ≤ 6.0)",
-  legend.title = "rs10191329 Genotype",
-  palette = "Accent",
-  facet.by = predicted_ancestry
-)
-
-
 ````
 
-# Mega-GWAS 
+## PCA on whole cohort 
 ````unix 
 cd /data/home/hmy117/ADAMS_severity/
 ~/plink2 --bfile /data/home/hmy117/ADAMS_severity/combined_adams_imputed \
@@ -2464,7 +2383,7 @@ cd /data/home/hmy117/ADAMS_severity/
 --out ./outputs/pcs_ALL
 ````
 
-# covar file 
+## Prepare covariates 
 ````R 
 library(tidyverse)
 setwd("/data/home/hmy117/ADAMS_severity/")
@@ -2520,55 +2439,9 @@ tractor_pheno = tractor_pheno %>% left_join(batch_codex,by="batch") %>%
 write_tsv(tractor_pheno,paste0("./outputs/tractor_pheno.tsv"))
 
 
-# t2e 
-t2e_pheno = pheno %>% mutate(edss_6 = ifelse(edss>=6,"1","0")) %>% 
-inner_join(covars,by=c("FID","IID")) %>% 
-dplyr::select(FID,IID,ageatedss,edss_6) %>% 
-dplyr::rename("time"=ageatedss) %>% 
-na.omit()
-write_tsv(t2e_pheno,paste0("./outputs/pheno_t2e_ALL.tsv"))
-write_tsv(covars %>% dplyr::select(-ageatedss),paste0("./outputs/cov_t2e_ALL.tsv"))
-
 ````
 
-# run mega-gwas 
-````unix 
-
-qsub "/data/home/hmy117/ADAMS_severity/scripts/mega_gwas.sh"
-
-# t2e
-regenie \
---step 1 \
---bed /data/home/hmy117/ADAMS_severity/combined_adams_imputed \
---extract ./outputs/pruned_snps_for_pca_ALL.prune.in \
---phenoFile ./outputs/pheno_t2e_ALL.tsv \
---phenoColList time \
---eventColList edss_6 \
---covarFile ./outputs/cov_t2e_ALL.tsv \
---catCovarList Sex \
---niter 1000 \
---t2e \
---out ./outputs/step1_gwas_t2e_ALL \
---bsize 1000
-
-# step 2
-regenie \
---step 2 \
---pred ./outputs/step1_gwas_t2e_ALL_pred.list \
---bed /data/home/hmy117/ADAMS_severity/combined_adams_imputed \
---phenoFile ./outputs/pheno_t2e_ALL.tsv \
---phenoColList time \
---eventColList edss_6 \
---covarFile ./outputs/cov_t2e_ALL.tsv \
---catCovarList Sex \
---t2e \
---out ./outputs/step2_gwas_t2e_ALL \
---bsize 1000
-
-
-````
-
-# Severity GWAS
+## Severity GWAS
 ````unix
 cd /data/home/hmy117/ADAMS_severity/
 head "/data/home/hmy117/ADAMS_severity/outputs/ancestry_calls.tsv"
@@ -2603,7 +2476,7 @@ awk -v anc=$ancestry '{if($3==anc) print $1,$2}' "/data/home/hmy117/ADAMS_severi
 done
 ````
 
-# make covar file in R 
+## Make per-ancestry covariate files 
 ````R 
 library(tidyverse)
 setwd("/data/home/hmy117/ADAMS_severity/")
@@ -2654,11 +2527,9 @@ write_tsv(covars,paste0("./outputs/cov_plink_",ancestry,".tsv"))
 
 ````
 
-
-# Run GWAS 
+## Run GWAS per-ancestry
 ````unix
 #  qsub plink_gwas.sh
-
 cd /data/home/hmy117/ADAMS_severity/
 for ancestry in CSA EUR AFR; 
 do
@@ -2674,9 +2545,8 @@ done
 
 ````
 
-# PLINK meta-analysis 
+## PLINK meta-analysis 
 ````unix 
-
 
 # format input files 
 cd /data/home/hmy117/ADAMS_severity/
@@ -2719,7 +2589,7 @@ study report-all \
 
 ````
 
-# VEP 
+## VEP 
 ````unix 
 
 # get significant snps 
@@ -2777,8 +2647,7 @@ vep -i site_only_vcf_imsgc.vcf \
 --tab
 ````
 
-# PICK UP HERE 28-10
-# Plots 
+## Plots 
 ````R 
 library(tidyverse)
 setwd("/data/home/hmy117/ADAMS_severity/")
@@ -2894,67 +2763,8 @@ dev.off()
 
 ````
 
-# step 1
-module load miniforge
-conda activate regenie_env
 
-regenie \
---bed ./outputs/imputed_genotypes_$ancestry \
---extract ./outputs/pruned_snps_for_pca_$ancestry\.prune.in \
---phenoFile ./outputs/pheno_$ancestry\.tsv \
---covarFile ./outputs/cov_$ancestry\.tsv \
---catCovarList Sex \
---qt \
---apply-rint  \
---step 1 \
---out ./outputs/step1_gwas_$ancestry \
---bsize 1000 \
---force-step1
-
-# step 2
-regenie \
---bed ./outputs/imputed_genotypes_$ancestry \
---phenoFile ./outputs/pheno_$ancestry\.tsv \
---covarFile ./outputs/cov_$ancestry\.tsv \
---catCovarList Sex \
---qt \
---apply-rint  \
---step 2 \
---pred ./outputs/step1_gwas_$ancestry_pred.list \
---out ./outputs/step2_gwas_$ancestry \
---bsize 1000
-
-# t2e
-regenie \
---step 1 \
---bed ./outputs/imputed_genotypes_$ancestry \
---extract ./outputs/pruned_snps_for_pca_$ancestry\.prune.in \
---phenoFile ./outputs/pheno_t2e_$ancestry\.tsv \
---phenoColList time \
---eventColList edss_6 \
---covarFile ./outputs/cov_t2e_$ancestry\.tsv \
---catCovarList Sex \
---niter 1000 \
---t2e \
---out ./outputs/step1_gwas_t2e_$ancestry \
---bsize 1000
-
-# step 2
-regenie \
---step 2 \
---pred ./outputs/step1_gwas_t2e_$ancestry\_pred.list \
---bed ./outputs/imputed_genotypes_$ancestry \
---phenoFile ./outputs/pheno_t2e_$ancestry\.tsv \
---phenoColList time \
---eventColList edss_6 \
---covarFile ./outputs/cov_t2e_$ancestry\.tsv \
---catCovarList Sex \
---t2e \
---out ./outputs/step1_gwas_t2e_$ancestry \
---bsize 1000
-
-
-# RFMIX 
+## RFMIX 
 ````unix
 # mkdir /data/scratch/hmy117/rfmix
 cd /data/scratch/hmy117/rfmix
@@ -2969,11 +2779,11 @@ awk '{print $1,$2,$4}' genetic_map_hg38_withX.txt > genetic_map
 
 cd /data/scratch/hmy117/rfmix
 
-qsub /data/home/hmy117/ADAMS_severity/scripts/rfmix.sh # running 31-10
+qsub /data/home/hmy117/ADAMS_severity/scripts/rfmix.sh 
 ````
 
-# Tractor 
-## setup
+## Tractor 
+### Setup
 ````unix
 # git clone https://github.com/Atkinson-Lab/Tractor.git
 module load miniforge
@@ -2985,17 +2795,15 @@ cd /data/scratch/hmy117/rfmix
 qsub /data/home/hmy117/ADAMS_severity/scripts/tractor.sh
 ````
 
-
-# run tractor gwas
+### Run tractor gwas
 module unload miniforge
 module load R/4.4.1
 
-qsub  /data/home/hmy117/ADAMS_severity/scripts/tractor_gwas.sh # running  29-10
+qsub  /data/home/hmy117/ADAMS_severity/scripts/tractor_gwas.sh 
 
 
 
-
-# Explore in R
+### Explore in R
 ````R
 
 library(tidyverse)
@@ -3207,257 +3015,9 @@ mutate(prop = n/sum(n))
 
 ````
 
-# Phenocopies
-cd /data/home/hmy117/ADAMS_severity/outputs
 
-# Compressed VCF file
-curl -O https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz
-# Index file
-curl -O https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz.tbi
-
-module unload R
-module load miniforge
-mamba activate vep_env
-
-head -n1 /data/home/hmy117/ADAMS/genotypes/QMUL_Aug_23/outputs/ADAMS_geno_fid_iid.fam > sample_to_keep
-~/plink2 --bfile /data/home/hmy117/ADAMS/genotypes/QMUL_Aug_23/outputs/ADAMS_geno_fid_iid \
---set-all-var-ids chr@:#:\$r\:\$a \
---make-bed \
---export vcf \
---max-maf 0.05 \
---geno 0.01 \
---hwe 1e-20 \
---mac 1 \
---snps-only just-acgt \
---rm-dup exclude-all \
---out cohort_vcf_for_vep
-
-# annotate with vep
-vep -i cohort_vcf_for_vep.vcf \
--o /data/home/hmy117/ADAMS_severity/outputs/snp_annotations_clinvar \
---custom file=clinvar.vcf.gz,short_name=ClinVar,format=vcf,type=exact,coords=0,fields=CLNSIG%CLNREVSTAT%CLNDN \
---cache \
---canonical \
---dir_cache /data/scratch/hmy117/.vep \
---force_overwrite \
---nearest symbol \
---tab
-
-# filter to pathogenic 
-cat "/data/home/hmy117/ADAMS_severity/outputs/snp_annotations_clinvar" | grep -E "Pathogenic" | grep -v -i -E "likely" |cut -f1 | uniq  > pathogenic_snps
-
-# filter plink file
-~/plink2 --bfile /data/home/hmy117/ADAMS/genotypes/QMUL_Aug_23/outputs/ADAMS_geno_fid_iid \
---set-all-var-ids chr@:#:\$r\:\$a \
---make-bed \
---extract pathogenic_snps \
---export vcf \
---max-maf 0.05 \
---geno 0.01 \
---hwe 1e-20 \
---mac 1 \
---snps-only just-acgt \
---rm-dup exclude-all \
---out cohort_vcf_for_vep_pathogenic
-
-# annotate with vep round2
-vep -i cohort_vcf_for_vep_pathogenic.vcf \
--o /data/home/hmy117/ADAMS_severity/outputs/snp_annotations_clinvar_pathogenic \
---custom file=clinvar.vcf.gz,short_name=ClinVar,format=vcf,type=exact,coords=0,fields=CLNSIG%CLNREVSTAT%CLNDN \
---cache \
---everything \
---canonical \
---dir_cache /data/scratch/hmy117/.vep \
---force_overwrite \
---nearest symbol \
---tab
-
-# get freqs 
-awk '{print $1"_"$1}' /data/home/hmy117/ADAMS_severity/combined_adams_imputed.fam > samples
-~/plink2 --vcf cohort_vcf_for_vep_pathogenic.vcf \
---geno-counts \
---keep samples \
---out pathogenic_counts
-
-# get individual genotypes
-cd /data/home/hmy117/ADAMS_severity/outputs
-~/plink2 --vcf cohort_vcf_for_vep_pathogenic.vcf \
---recode A \
---keep samples \
---out pathogenic_genotypes
-
-# get missingness data
-~/plink2 --vcf cohort_vcf_for_vep_pathogenic.vcf \
---keep samples \
---missing \
---het
-
-
-````R 
-library(tidyverse)
-setwd("/data/home/hmy117/ADAMS_severity/outputs/")
-
-vars = read_table("/data/home/hmy117/ADAMS_severity/outputs/snp_annotations_clinvar",skip=49) %>%
-  filter(ClinVar_CLNSIG=="Pathogenic")
-
-pathogenic_vars = read_table("/data/home/hmy117/ADAMS_severity/outputs/snp_annotations_clinvar_pathogenic",skip=113,col_types=cols(.default="c")) %>% 
-  filter(CANONICAL=="YES" & MANE == "MANE_Select") %>% 
-  dplyr::rename("ID"=  `#Uploaded_variation`) 
-
-counts = read_table("/data/home/hmy117/ADAMS_severity/outputs/pathogenic_counts.gcount")
-counts = counts %>% 
-  left_join(pathogenic_vars,by="ID")
-
-# r58 genes 
-r58 = read_tsv("/data/home/hmy117/ADAMS_severity/Adult onset neurodegenerative disorder.tsv") %>% 
-filter(grepl("MONOALLELIC",Model_Of_Inheritance) | grepl("BIALLELIC",Model_Of_Inheritance)) %>% 
-filter(`Entity type` == "gene")
-
-colnames(r58)[3] = "SYMBOL"
-
-# check which variants are actually tested 
-vars = vars  %>% dplyr::rename("SYMBOL"=NEAREST) %>% inner_join(r58,by="SYMBOL")
-vars %>% distinct(`#Uploaded_variation`)
-
-# check how many variants are excluded 
-a = counts %>% distinct(ID) %>% nrow()
-
-# join
-counts = counts %>% inner_join(r58,by="SYMBOL")
-b = counts %>% distinct(ID) %>% nrow()
-a - b
-b
-counts %>% distinct(SYMBOL) %>% nrow()
-
-# add genotypes
-genos = read_table("pathogenic_genotypes.raw") %>% separate(IID,sep="_",into=c("IID","other"))
-pheno = read_table("../pheno/adams_pheno.tsv")
-cov = read_table("../pheno/adams_covars.tsv")
-ancestry = read_table("../outputs/ancestry_calls.tsv")
-
-# check that carriers are in keeping with mode of inheritance
-counts = counts %>% 
-  filter(
-    (grepl("MONOALLELIC",Model_Of_Inheritance) & HET_REF_ALT_CTS > 0) |
-    (grepl("BIALLELIC",Model_Of_Inheritance) & TWO_ALT_GENO_CTS > 0) 
-  )    
-counts %>% distinct(SYMBOL) %>% nrow()
-
-# loop through vars 
-
-all_carriers = list()
-het_ancestry = list()
-hom_ancestry = list()
-
-het_agedx = list()
-hom_agedx = list()
-
-het_armss = list()
-hom_armss = list()
-
-for(i in c(1:nrow(counts))){
-  this_var = counts$ID[i]
-  this_alt = counts$ALT[i]
-  this_ref = counts$REF[i]
-  ref_col = paste0(this_var,"_",this_ref)
-  alt_col = paste0(this_var,"_",this_alt)
-
-  # get hets 
-  this_geno =  genos %>% 
-      dplyr::select(IID,contains(this_var))
-
-  # loop through and find alt ct 
-  alt_cts = list()
-  for(j in 1:nrow(this_geno)){
-    
-    alt_ct_from_ref = 2 - this_geno[[ref_col]][j]
-    alt_ct = this_geno[[alt_col]][j]
-    
-    alt_cts[[j]] = ifelse(is.null(alt_ct),alt_ct_from_ref,alt_ct)
-  }
-  this_geno$alt_ct = unlist(alt_cts)
-  
-  # join 
-  this_geno = this_geno %>% 
-    mutate(IID = as.numeric(IID)) %>%
-    left_join(pheno %>% 
-    mutate(IID = as.numeric(IID)),by="IID",) %>%
-    left_join(ancestry %>% 
-    mutate(IID = as.numeric(IID)),by="IID")
-
-  het = this_geno %>% filter(alt_ct == 1)
-  hom = this_geno %>% filter(alt_ct == 2)
-
-  het_ancestry[[i]] = paste0(het$predicted_ancestry,collapse=";")
-  hom_ancestry[[i]] = paste0(hom$predicted_ancestry,collapse=";")
-
-  het_agedx[[i]] = paste0(het$age_at_dx,collapse=";")
-  hom_agedx[[i]] = paste0(hom$age_at_dx,collapse=";")
-
-  het_armss[[i]] = paste0(het$gARMSS,collapse=";")
-  hom_armss[[i]] = paste0(hom$gARMSS,collapse=";")
-
-
-  carrier_dat = this_geno %>% filter(alt_ct >= 1) %>% mutate(var = this_var, gene = counts$SYMBOL[i] )
-  if(nrow(carrier_dat)>0){
-  all_carriers[[length(all_carriers)+1]] = carrier_dat
-  }
-}
-
-counts$het_ancestry = unlist(het_ancestry)
-counts$hom_ancestry = unlist(hom_ancestry)
-
-counts$het_agedx = unlist(het_agedx)
-counts$hom_agedx = unlist(hom_agedx)
-
-counts$het_armss = unlist(het_armss)
-counts$hom_armss = unlist(hom_armss)
-
-
-write_csv(counts,"/data/home/hmy117/ADAMS_severity/outputs/pathogenic_vars_counts.csv")
-
-# carrier assessment 
-all_carriers = do.call("bind_rows",all_carriers)
-all_carriers %>% distinct(IID) %>% nrow()
-all_carriers %>% mutate(IID = as.character(IID)) %>% arrange(IID) %>% dplyr::select(IID,var,gene)
-
-# get miss and het data 
-miss = read_table("/data/scratch/hmy117/adams_imputed_severity_topmed/missingness_report.imiss") %>% dplyr::select(IID,F_MISS)
-het = read_table("/data/scratch/hmy117/adams_imputed_severity_topmed/het_check.het")%>% dplyr::select(IID,F)
-
-all_carriers %>% 
-  mutate(IID = as.character(IID)) %>% arrange(IID) %>% dplyr::select(IID,var,gene) %>%
-  inner_join(miss,by="IID") %>%
-  inner_join(het,by="IID") 
-
-
-dat_ancestry = ancestry %>% 
-  mutate(IID = as.numeric(IID)) %>%
-  inner_join(pheno %>%     mutate(IID = as.numeric(IID)),by="IID") %>%
-  left_join(cov %>%   mutate(IID = as.numeric(IID)),by="IID") %>% 
-  mutate(carrier = ifelse(IID %in% all_carriers$IID,"yes","no"))
-
-dat_ancestry %>% group_by(predicted_ancestry) %>% dplyr::count(carrier) %>% mutate(pct = 100*n/sum(n))
-fisher.test(table(dat_ancestry$predicted_ancestry=="EUR",dat_ancestry$carrier))
-dat_ancestry %>% group_by(carrier) %>% summarise(median(age_at_dx,na.rm=T))
-
-library(compareGroups)
-
-# all cohort by ancestry 
-tbl = compareGroups::compareGroups(data = dat_ancestry,
-                                   carrier ~ age_at_dx + gARMSS,
-                                   method = c(2,2))
-tbl2 = compareGroups::createTable(tbl)
-
-export2csv(tbl2,"/data/home/hmy117/ADAMS_severity/outputs/demographics_table_by_ancestry.csv")
-
-````
-
-
-########################################
-# SUSIE
-#######################################
-
+## SUSIE
+````unix
 module load R/4.4.1
 
 # mkdir 
@@ -3543,7 +3103,9 @@ awk 'BEGIN{OFS="\t"};NR==1{print $0,"ID"};NR>1{if($1==2 && $2 > 70449869 && $2 <
 --maf 0.05 \
 --pval_thresh=1 \
 --max_iter=100
+````
 
+## Plot fine-mapping results
 ````R 
 library(tidyverse)
 dat = read_table("/data/scratch/hmy117/susiex/dysferlin.snp") 
@@ -3561,4 +3123,9 @@ p
 dev.off()
 
 
+````
+
+## GWAS catalogue prep
+````unix
+Rscript gwas_catalogue_prep.R
 ````
