@@ -1,18 +1,19 @@
 # Preamble
 This repository contains code used to generate the findings presented in 'Association between genetic ancestry and Multiple Sclerosis severity' published in _Annals Of Neurology_.
 
-GWAS summary statistics can be downloaded from the GWAS catalogue.
+Per-ancestry GWAS summary statistics can be downloaded from the GWAS catalogue.
 
-27-08-26
-b.jacobs@qmul.ac.uk
+Date: 27-08-26.
+
+Author: Ben Jacobs
+
+Email: b.jacobs@qmul.ac.uk
 
 Contents:
 - [Imputation](#Imputation)
 - [Genotype QC](#QC)
 - [Phenotype QC & analysis](#Phenotype)
 - [GWAS](#GWAS)
-  - [Advanced Options](#advanced-options)
-- [FAQ](#faq)
 
 # Imputation
 ## Imputation prep
