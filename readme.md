@@ -3128,5 +3128,11 @@ dev.off()
 
 ## GWAS catalogue prep
 ````unix
+~/plink2 --bfile ~/ADAMS_severity/outputs/imputed_genotypes_AFR --freq --out ~/ADAMS_severity/outputs/freqs_AFR
+~/plink2 --bfile ~/ADAMS_severity/outputs/imputed_genotypes_CSA --freq --out ~/ADAMS_severity/outputs/freqs_CSA
+~/plink2 --bfile ~/ADAMS_severity/outputs/imputed_genotypes_AFR --freq --out ~/ADAMS_severity/outputs/freqs_EUR
+
 Rscript gwas_catalogue_prep.R
+
+
 ````
