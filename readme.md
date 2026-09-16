@@ -1577,7 +1577,7 @@ mutate(n = nrow(model_dat),
   n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
   n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
 
-just_ukmsr = glm(data = model_dat %>% filter(Site == "UKMSR"), armss_norm ~ predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Unadjusted (website)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
+just_ukmsr = glm(data = model_dat %>% filter(Site == "UKMSR"), armss_norm ~ predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Unadjusted (UKMSR)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
 mutate(n = nrow(model_dat), 
   n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
   n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
@@ -1592,7 +1592,7 @@ mutate(n = nrow(model_dat),
   n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
   n_mid = nrow(model_dat %>% filter(predicted_ancestry=="MID")))
 
-just_women = glm(data = model_dat %>% filter(Sex == "F"), armss_norm ~ predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Unadjusted (just males)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
+just_women = glm(data = model_dat %>% filter(Sex == "F"), armss_norm ~ predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Unadjusted (just females)",outcome = "ARMSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
 mutate(n = nrow(model_dat), 
   n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
   n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
@@ -1633,7 +1633,7 @@ mutate(n = nrow(model_dat),
 model_dat = data %>% filter(!is.na(edss))
 model_dat$edss_norm = RNOmni::RankNorm(model_dat$edss)
 age_sex_site_edss = glm(data = model_dat, edss_norm ~ ageatedss + Site + Sex + predicted_ancestry) %>% broom::tidy() %>% mutate(model = "Age + Sex + Site",outcome = "EDSS") %>% mutate(lower_ci = estimate - 1.96 * `std.error`,upper_ci = estimate + 1.96 * `std.error`)%>%
-mutate(n = nrow(model_dat), 
+mutate(n = nrow(model_dat),   
   n_eur = nrow(model_dat %>% filter(predicted_ancestry=="EUR")),
   n_afr = nrow(model_dat %>% filter(predicted_ancestry=="AFR")),
   n_csa = nrow(model_dat %>% filter(predicted_ancestry=="CSA")),
@@ -1698,8 +1698,8 @@ age_sex_site_direct_edss,age_sex_site_within_5y_of_dx,
 site_model,
 age_model,
 unadjusted_model
-) %>%
-  write_csv(file="./outputs/severity_models.csv")
+) 
+write_csv(overall_model_dat,"/data/home/hmy117/ADAMS_severity/outputs/severity_models.csv")
 
 # plot 
 plot_dat = overall_model_dat %>% 
